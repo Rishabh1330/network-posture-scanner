@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Network Posture Scanner API (API Gateway, Lambda, DynamoDB)
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref ScanTable
+        CORS_ORIGIN: '*'
+Resources:
+  ScannerApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          UsagePlanName: network-posture-scanner-plan
+          Description: API key and throttle policy for Network Posture Scanner clients.
+          Throttle:
+            BurstLimit: 10
+            RateLimit: 5
+      Cors: "'*'"
+  ScanTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: scan_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: scan_id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/NetworkPostureScannerAPI/
+      Handler: lambda_function.lambda_handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref ScanTable
+      Events:
+        Scan:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ScannerApi
+            Path: /scan
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+  DevicesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/GetDevicesLambda/
+      Handler: lambda_function.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScanTable
+      Events:
+        Devices:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ScannerApi
+            Path: /devices
+            Method: get
+            Auth:
+              ApiKeyRequired: true
+  FirewallRulesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/GetFirewallRulesLambda/
+      Handler: lambda_function.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScanTable
+      Events:
+        FirewallRules:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ScannerApi
+            Path: /firewall-rules
+            Method: get
+            Auth:
+              ApiKeyRequired: true
+  CisResultsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/GetCISResultsLambda/
+      Handler: lambda_function.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ScanTable
+      Events:
+        CisResults:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ScannerApi
+            Path: /cis-results
+            Method: get
+            Auth:
+              ApiKeyRequired: true
+Outputs:
+  ScanEndpoint:
+    Description: POST reports here with Content-Type and x-api-key headers.
+    Value: !Sub 'https://${ScannerApi}.execute-api.${AWS::Region}.amazonaws.com/prod/scan'

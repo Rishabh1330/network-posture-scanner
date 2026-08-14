@@ -2,11 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-from api import (
-    get_devices,
-    get_firewall,
-    get_cis_results
-)
+from api import get_dashboard_data
 
 # ============================================================
 # PAGE CONFIG
@@ -96,17 +92,14 @@ with st.sidebar:
 
     if st.button(
         "🔄 Refresh Data",
-        use_container_width=True
+        width="stretch"
     ):
         st.rerun()
 
     st.divider()
 
-    st.subheader("System")
-
-    st.success("API Gateway")
-    st.success("AWS Lambda")
-    st.success("DynamoDB")
+    st.subheader("Data source")
+    st.caption("Loaded after scan data is fetched.")
 
     st.divider()
 
@@ -120,19 +113,26 @@ with st.sidebar:
 
 try:
 
-    devices = get_devices()
-    firewall = get_firewall()
-    cis = get_cis_results()
+    devices, firewall, cis, data_source, aws_error = get_dashboard_data()
 
 except Exception as e:
 
     st.error(
-        "❌ Unable to fetch data from AWS."
+        "Unable to load scan data."
     )
 
     st.code(str(e))
 
     st.stop()
+
+if data_source == "AWS API Gateway":
+    st.sidebar.success(f"Source: {data_source}")
+else:
+    st.sidebar.info(f"Source: {data_source}")
+    if aws_error:
+        st.sidebar.caption("AWS unavailable; showing the most recent local scan.")
+
+st.caption(f"Data source: {data_source}")
 
 # ============================================================
 # NORMALIZE API RESPONSES
@@ -311,6 +311,15 @@ else:
             "Status":
                 device.get("state", "-"),
 
+            "MAC Address":
+                device.get("mac_address", "-"),
+
+            "MAC Vendor":
+                device.get("mac_vendor", "-"),
+
+            "Discovery":
+                ", ".join(device.get("discovery_methods", [])),
+
             "Open Ports":
                 port_numbers,
 
@@ -323,7 +332,7 @@ else:
 
         st.dataframe(
             pd.DataFrame(device_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -343,6 +352,10 @@ st.markdown(
     '<div class="section-title">🔥 Firewall Configuration</div>',
     unsafe_allow_html=True
 )
+
+firewall_source = firewall.get("source", {})
+if firewall_source.get("type") == "simulated_config":
+    st.info(f"Firewall source: simulated configuration ({firewall_source.get('path', 'unknown path')}).")
 
 rules = firewall.get(
     "rules",
@@ -472,7 +485,7 @@ if rules:
 
         st.dataframe(
             pd.DataFrame(firewall_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -673,7 +686,7 @@ st.divider()
 
 st.caption(
     "Network Posture Scanner v1.0  •  "
-    "Python + Nmap + AWS API Gateway + "
+    "Python + Wi-Fi/LAN Discovery + AWS API Gateway + "
     "AWS Lambda + DynamoDB + Streamlit"
 )
 

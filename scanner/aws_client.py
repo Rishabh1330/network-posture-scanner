@@ -1,37 +1,17 @@
+"""HTTPS uploader for an API Gateway endpoint protected by an API key."""
 import requests
 
-API_URL = "https://04l7zkg3oi.execute-api.ap-south-1.amazonaws.com/prod/scan"
 
-
-def upload_report(report):
-    """
-    Upload scan report to AWS API Gateway.
-    """
-
+def upload_report(report, api_url, api_key):
+    if not api_url or not api_key:
+        print("AWS upload skipped: set NPS_API_URL and NPS_API_KEY to enable it.")
+        return False
     try:
-        response = requests.post(
-            API_URL,
-            json=report,
-            headers={
-                "Content-Type": "application/json"
-            },
-            timeout=15
-        )
-
-        print("\nAWS Upload")
-        print("-" * 40)
-        print(f"URL         : {API_URL}")
-        print(f"Status Code : {response.status_code}")
-
-        try:
-            print("Response:")
-            print(response.json())
-        except Exception:
-            print(response.text)
-
-        return response.status_code == 200
-
-    except requests.exceptions.RequestException as e:
-        print("\nAWS Upload Failed")
-        print(e)
+        response = requests.post(api_url, json=report, headers={
+            "Content-Type": "application/json", "x-api-key": api_key}, timeout=15)
+        response.raise_for_status()
+        print(f"AWS upload successful (HTTP {response.status_code}).")
+        return True
+    except requests.RequestException as error:
+        print(f"AWS upload failed: {error}")
         return False

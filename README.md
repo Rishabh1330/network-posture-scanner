@@ -2,13 +2,52 @@
 
 A lightweight network security posture assessment tool that discovers network devices, identifies open ports and services, analyzes firewall configurations, performs CIS-inspired security checks, stores scan results in AWS, and presents the results through a Streamlit dashboard.
 
-This project demonstrates an end-to-end security assessment workflow using Python, Nmap, AWS Lambda, API Gateway, DynamoDB, REST APIs, and Streamlit.
+> Use the scanner only against systems and IP ranges you are authorized to assess.
+
+## Quick start
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m scanner.main
+python -m pytest -q
+```
+
+By default on Windows, the scanner identifies the connected Wi-Fi adapter (or active LAN adapter), derives its real IPv4 subnet, performs an ICMP sweep and TCP connect scan of common service ports, then reads the local ARP cache. This combination finds devices that respond to ping/TCP as well as local Layer-2 neighbours that suppress those probes. Only devices that are reachable or ARP-visible are included in the device list.
+
+Use `--targets` to scan a specific authorized IP, list, or CIDR of up to 1,024 hosts instead:
+
+```powershell
+python -m scanner.main --targets 192.168.1.0/24
+```
+
+The tool records an ARP MAC address where Windows provides one. Vendor lookups are reported as unknown in this offline MVP rather than sending MAC addresses to a third party. Firewall checks use the included simulated configuration by default, which is acceptable for the assignment; provide another file with `--firewall-config` to assess a different supported configuration.
+
+For an AWS upload, copy `.env.example` to `.env`, set the API Gateway URL and key, then run `python -m scanner.main --upload`. The `x-api-key` is sent only in the HTTPS request header and is never stored in source control. The Streamlit dashboard uses AWS when it is available and automatically falls back to the latest local report if it is not.
+
+Deploy the ingestion stack with AWS SAM:
+
+```powershell
+sam build
+sam deploy --guided
+```
+
+After deployment and a successful `--upload`, verify the three read endpoints without exposing your API key:
+
+```powershell
+python scripts/verify_aws.py
+```
+
+`template.yaml` provisions encrypted DynamoDB storage, API Gateway API-key enforcement, and the ingestion Lambda. The existing read APIs (`/devices`, `/firewall-rules`, and `/cis-results`) can be deployed alongside it from the functions under `lambda/`.
+
+This project demonstrates an end-to-end security assessment workflow using Python, local Wi-Fi/LAN discovery, AWS Lambda, API Gateway, DynamoDB, REST APIs, and Streamlit.
 
 ---
 
 ## 📌 Features
 
-- Network device discovery using Nmap
+- Local Wi-Fi/LAN device discovery using ICMP, TCP, and ARP
 - IP address and hostname detection
 - Open port and service detection
 - Service banner and version detection
@@ -63,7 +102,7 @@ This project demonstrates an end-to-end security assessment workflow using Pytho
 
 ## 🔍 Network Discovery
 
-The scanner uses Nmap to discover devices and identify:
+The scanner discovers devices on the connected local subnet using a lightweight ICMP sweep, common TCP connection attempts, and the local ARP cache. It identifies:
 
 - IP address
 - Hostname
@@ -71,8 +110,8 @@ The scanner uses Nmap to discover devices and identify:
 - Open ports
 - Running services
 - Service banners
-- Product information
-- Version information
+- MAC address when available in the local ARP cache
+- Discovery method
 
 Example scan result:
 
@@ -316,7 +355,7 @@ network-posture-scanner/
 
 ### Network Security
 
-- Nmap
+- ICMP, TCP, and ARP discovery
 - Network discovery
 - Port scanning
 - Service detection
@@ -380,20 +419,6 @@ venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
-
----
-
-## 4. Install Nmap
-
-Nmap is required for network discovery and service detection.
-
-Verify the installation:
-
-```bash
-nmap --version
-```
-
-Make sure Nmap is available in the system PATH.
 
 ---
 
@@ -530,7 +555,7 @@ The project follows basic security practices:
 
 Potential future improvements include:
 
-- ARP-based device discovery
+- Offline OUI database for MAC-vendor identification
 - Larger network range scanning
 - MAC address and vendor identification
 - Additional CIS benchmark checks
@@ -569,7 +594,7 @@ The Network Posture Scanner combines network security assessment, cloud infrastr
 ```text
 Python
   +
-Nmap
+ICMP + TCP + ARP discovery
   +
 Network Security
   +

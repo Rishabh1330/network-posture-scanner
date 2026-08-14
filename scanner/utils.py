@@ -37,7 +37,7 @@ def save_json(report, filename="reports/scan_results.json"):
     with open(filename, "w", encoding="utf-8") as file:
         json.dump(report, file, indent=4)
 
-    print(f"\n✅ Report saved successfully: {filename}")
+    print(f"\nReport saved: {filename}")
 
 
 def count_open_ports(devices):
